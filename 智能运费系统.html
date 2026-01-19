@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>智能货运费用生成系统 v3.9</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root { --main-purple: #5d5bd4; --bg-gray: #f0f2f5; }
+        body { font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif; background: var(--bg-gray); margin: 0; padding: 20px; }
+
+        /* 配置面板 */
+        .config-panel { 
+            max-width: 1000px; 
+            margin: 0 auto 30px; 
+            background: white; 
+            padding: 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .config-header { grid-column: 1 / -1; border-bottom: 2px solid var(--bg-gray); padding-bottom: 10px; margin-bottom: 10px; }
+        .config-header h3 { margin: 0; color: var(--main-purple); }
+
+        .input-item label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #555; }
+        input, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        textarea { height: 100px; }
+
+        .action-area { grid-column: 1 / -1; display: flex; gap: 15px; margin-top: 10px; }
+        button { flex: 1; padding: 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; color: white; transition: 0.2s; }
+        .btn-preview { background: var(--main-purple); }
+        .btn-pdf { background: #27ae60; }
+        .btn-csv { background: #2980b9; }
+
+        /* 预览区 - A4 比例 */
+        .report-container { display: flex; justify-content: center; padding-bottom: 50px; }
+        .report-wrap { 
+            width: 794px; 
+            background: white; 
+            padding: 60px 50px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15); 
+            box-sizing: border-box; 
+            min-height: 1123px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .report-content { flex-grow: 1; }
+        .report-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 30px; }
+        .brand { display: flex; align-items: center; justify-content: center; gap: 15px; }
+        .logo-img { width: 45px; height: 45px; }
+        .logo-img img { width: 100%; height: 100%; object-fit: contain; }
+        .company-cn { font-size: 26px; font-weight: bold; margin: 0; }
+        .company-en { font-size: 9.5px; font-weight: bold; letter-spacing: 0.5px; }
+        
+        .doc-name { text-align: center; font-size: 24px; font-weight: bold; margin: 40px 0; letter-spacing: 6px; text-decoration: underline; text-underline-offset: 10px; }
+        .meta-box { font-size: 14px; display: flex; justify-content: space-between; margin-bottom: 25px; border-bottom: 1px dashed #ccc; padding-bottom: 10px; }
+        
+        .route-info { background: #f8f9ff; border-left: 5px solid var(--main-purple); padding: 15px 20px; margin-bottom: 30px; }
+        .route-title { font-size: 18px; font-weight: bold; display: block; margin-bottom: 5px; }
+        .route-detail { font-size: 13px; color: #666; }
+
+        .main-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: fixed; }
+        .main-table th { background: #f5f5f5; border: 1px solid #d0d0d0; padding: 12px 5px; font-size: 11px; }
+        .main-table td { border: 1px solid #d0d0d0; padding: 15px 5px; font-size: 12px; text-align: center; word-break: break-all; }
+        .sum-line { text-align: right; font-weight: bold; padding-right: 15px !important; }
+
+        .fee-table { width: 100%; border: 1px solid #000; margin-top: 20px; }
+        .fee-row { display: flex; border-bottom: 1px solid #000; }
+        .fee-row:last-child { border-bottom: none; }
+        .fee-head { width: 120px; background: #f5f5f5; padding: 15px; font-weight: bold; border-right: 1px solid #000; font-size: 14px; }
+        .fee-body { padding: 15px; flex: 1; font-size: 16px; }
+
+        .report-footer { text-align: center; margin-top: 50px; border-top: 1px solid #eee; padding-top: 15px; }
+        .footer-line-1 { font-size: 10px; color: #999; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .footer-line-2 { font-size: 9px; color: #bbb; }
+    </style>
+</head>
+<body>
+
+<div class="config-panel">
+    <div class="config-header"><h3>1. 配置信息</h3></div>
+    <div class="input-item"><label>上传 Logo</label><input type="file" id="upLogo" accept="image/*"></div>
+    <div class="input-item"><label>公司中英名称</label>
+        <input type="text" id="inCn" value="合辰供应链（深圳）有限公司">
+        <input type="text" id="inEn" value="HCN SUPPLY CHAIN (SHENZHEN) CO., LTD." style="margin-top:5px">
+    </div>
+    <div class="input-item"><label>客户名称</label><input type="text" id="inCust" placeholder="客户姓名"></div>
+    <div class="input-item"><label>路线设置 (例如: 出发 → 目的地)</label><input type="text" id="inRoute" value="中国🇨🇳 → 日本🇯🇵"></div>
+    <div class="input-item"><label>运输方式</label><input type="text" id="inShip" value="空运"></div>
+    <div class="input-item"><label>智能识别信息</label><textarea id="inSmart" placeholder="在此粘贴单号等信息..."></textarea></div>
+    <div class="input-item"><label>表格备注 (含附加费)</label><input type="text" id="inTableNote" placeholder="例如：报关费100"></div>
+    <div class="input-item"><label>报价单价 (¥/kg)</label><input type="number" id="inPrice" value="" step="0.01"></div>
+    
+    <div class="action-area">
+        <button class="btn-preview" onclick="doUpdate()">① 更新预览内容</button>
+        <button class="btn-pdf" onclick="processFile('pdf')">② 分享/下载 PDF</button>
+        <button class="btn-csv" onclick="processFile('csv')">③ 分享/下载 CSV</button>
+    </div>
+</div>
+
+<div class="report-container">
+    <div class="report-wrap" id="capture-area">
+        <div class="report-content">
+            <div class="report-header">
+                <div class="brand">
+                    <div class="logo-img" id="outLogo">HCN</div>
+                    <div class="company-cn" id="outCn">合辰供应链（深圳）有限公司</div>
+                </div>
+                <div class="company-en" id="outEn">HCN SUPPLY CHAIN (SHENZHEN) CO., LTD.</div>
+            </div>
+            <h2 class="doc-name">货运费用确认单</h2>
+            <div class="meta-box">
+                <span><b>运单号：</b> <span id="outNo">-</span></span>
+                <span><b>日期：</b> <span id="outDate">-</span></span>
+            </div>
+            <div class="route-info">
+                <span class="route-title" id="outRoute">中国🇨🇳 → 日本🇯🇵</span>
+                <span class="route-detail" id="outDesc">运输方式：空运 | 客户：-</span>
+            </div>
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th width="22%">单号</th>
+                        <th width="12%">体积(m³)</th>
+                        <th width="12%">重量(KG)</th>
+                        <th width="12%">计费重</th>
+                        <th width="8%">数量</th>
+                        <th width="14%">品名</th>
+                        <th width="20%">备注</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td>-</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0</td><td>-</td><td>-</td></tr>
+                </tbody>
+                <tfoot>
+                    <tr><td colspan="7" class="sum-line" id="outSum">汇总：0件 / 0.00kg</td></tr>
+                </tfoot>
+            </table>
+            <div class="fee-table">
+                <div class="fee-row"><div class="fee-head">收费单价（RMB）</div><div class="fee-body" id="outUnitPrice">¥0.00 / kg</div></div>
+                <div class="fee-row"><div class="fee-head">应付合计（RMB）</div><div class="fee-body" style="font-weight:bold; font-size:20px; color:#d63031;" id="outTotal">¥0.00</div></div>
+            </div>
+        </div>
+        <div class="report-footer">
+            <div class="footer-line-1">此运单由系统自动生成，如有疑问请联系客服或者业务。</div>
+            <div class="footer-line-2">生成时间：<span id="outGenAt">-</span></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let globalData = { cust: '客户', no: '单号', qty: 0 };
+
+    document.getElementById('upLogo').onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => { document.getElementById('outLogo').innerHTML = `<img src="${ev.target.result}">`; };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    function doUpdate() {
+        const text = document.getElementById('inSmart').value;
+        const price = parseFloat(document.getElementById('inPrice').value) || 0;
+        const tableNote = document.getElementById('inTableNote').value || "-";
+        const customRoute = document.getElementById('inRoute').value || "未填写路线";
+        
+        const orderNo = (text.match(/(?:HET|SHIP-|单号)[:：]?\s*([A-Z0-9\-]+)/i) || ["", "未识别"])[1];
+        const billWeight = parseFloat((text.match(/(?:计费重|计费重量)[:：]?\s*(\d+(\.\d+)?)/) || ["", 0])[1]);
+        const actWeight = parseFloat((text.match(/(?:实际重量|重量)[:：]?\s*(\d+(\.\d+)?)/) || ["", 0])[1]);
+        const volume = (text.match(/(?:体积|实际体积)[:：]?\s*(\d+(\.\d+)?)/) || ["", "0.00"])[1];
+        const qty = parseInt((text.match(/(?:件数[:：]\s*|==)(\d+)/) || ["", 0])[1]);
+        const product = (text.match(/(?:品名[:：]\s*)(\S+)/) || ["", "未识别"])[1];
+
+        let extraFee = 0;
+        const feeMatch = tableNote.match(/\d+(\.\d+)?/);
+        if (feeMatch) extraFee = parseFloat(feeMatch[0]);
+        const total = (billWeight * price) + extraFee;
+
+        globalData = { 
+            cust: document.getElementById('inCust').value || "客户", 
+            no: orderNo, 
+            vol: volume, 
+            actW: actWeight.toFixed(2), 
+            billW: billWeight.toFixed(2), 
+            qty: qty, 
+            pro: product, 
+            note: tableNote,
+            price: price.toFixed(2),
+            total: total.toLocaleString('zh-CN', {minimumFractionDigits: 2})
+        };
+
+        // 更新预览内容
+        document.getElementById('outCn').innerText = document.getElementById('inCn').value;
+        document.getElementById('outEn').innerText = document.getElementById('inEn').value;
+        document.getElementById('outNo').innerText = orderNo;
+        document.getElementById('outDate').innerText = new Date().toLocaleDateString('zh-CN');
+        
+        // 更新路线为用户输入的内容
+        document.getElementById('outRoute').innerText = customRoute;
+        
+        document.getElementById('outDesc').innerText = `运输方式：${document.getElementById('inShip').value} | 客户：${globalData.cust}`;
+        document.getElementById('tableBody').innerHTML = `<tr><td>${orderNo}</td><td>${volume}</td><td>${actWeight.toFixed(2)}</td><td>${billWeight.toFixed(2)}</td><td>${qty}</td><td>${product}</td><td>${tableNote}</td></tr>`;
+        document.getElementById('outSum').innerText = `汇总：${qty}件 / ${billWeight.toFixed(2)}kg`;
+        document.getElementById('outUnitPrice').innerText = `¥${price.toFixed(2)} / kg`;
+        document.getElementById('outTotal').innerText = `¥${globalData.total}`;
+        document.getElementById('outGenAt').innerText = new Date().toLocaleString();
+    }
+
+    async function processFile(type) {
+        if (!globalData.no || globalData.no === '单号') { alert("请先点击【更新预览内容】"); return; }
+        
+        const d = new Date();
+        const dateStr = `${d.getFullYear()}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}`;
+        const fileName = `${globalData.cust}_${globalData.no}_${globalData.qty}件_报价单_${dateStr}.${type}`;
+        
+        let blob;
+        if (type === 'pdf') {
+            const element = document.getElementById('capture-area');
+            const canvas = await html2canvas(element, { scale: 2.5, useCORS: true });
+            const imgData = canvas.toDataURL('image/jpeg', 0.9);
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = (canvas.height * pageWidth) / canvas.width;
+            pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+            blob = pdf.output('blob');
+        } else {
+            const csvRows = [
+                ["客户名称", "运单号", "体积(m3)", "重量(kg)", "计费重(kg)", "件数", "品名", "备注", "单价", "总计(元)"],
+                [globalData.cust, globalData.no, globalData.vol, globalData.actW, globalData.billW, globalData.qty, globalData.pro, globalData.note, globalData.price, globalData.total]
+            ];
+            const csvString = "\ufeff" + csvRows.map(row => row.map(v => `"${v}"`).join(",")).join("\n");
+            blob = new Blob([csvString], { type: "text/csv;charset=utf-8" });
+        }
+
+        const file = new File([blob], fileName, { type: blob.type });
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file], title: fileName });
+            } catch (err) {
+                if (err.name !== 'AbortError') downloadLocal(blob, fileName);
+            }
+        } else {
+            downloadLocal(blob, fileName);
+        }
+    }
+
+    function downloadLocal(blob, name) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+</script>
+
+</body>
+</html>
